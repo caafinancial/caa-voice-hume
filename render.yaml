@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: caa-voice-hume
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python hume_twilio_bridge.py
+    envVars:
+      - key: HUME_API_KEY
+        sync: false
+      - key: HUME_SECRET_KEY
+        sync: false
+      - key: HUME_CONFIG_ID
+        value: 7d7e9c68-a45f-47d5-9c21-a5847bf4248d
