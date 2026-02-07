@@ -194,7 +194,9 @@ async def hume_test():
 async def voice_incoming(request: Request):
     """TwiML endpoint for incoming calls."""
     host = request.headers.get("host", "localhost")
-    protocol = "wss" if request.url.scheme == "https" else "ws"
+    # Check X-Forwarded-Proto header for reverse proxy (Railway, Render, etc.)
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    protocol = "wss" if forwarded_proto == "https" else "ws"
     
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -214,5 +216,5 @@ async def voice_stream(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
