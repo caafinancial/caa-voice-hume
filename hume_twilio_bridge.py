@@ -6,8 +6,8 @@ real-time voice conversations with backchanneling.
 
 Audio Flow:
 1. Twilio sends mulaw 8kHz audio via Media Streams
-2. Bridge converts to PCM 48kHz for Hume (EVI default sample rate)
-3. Hume processes and returns PCM 48kHz audio
+2. Bridge converts to PCM 16kHz for Hume (2x ratio for cleaner conversion)
+3. Hume processes and returns PCM 16kHz audio
 4. Bridge converts back to mulaw 8kHz for Twilio
 """
 
@@ -66,18 +66,18 @@ class HumeTwilioBridge:
         self._downsample_state = None  # 48kHz -> 8kHz
     
     def resample_up(self, data: bytes) -> bytes:
-        """Resample from 8kHz to 48kHz, maintaining state for smooth audio."""
+        """Resample from 8kHz to 16kHz (2x ratio for cleaner conversion)."""
         import audioop
         converted, self._upsample_state = audioop.ratecv(
-            data, 2, 1, 8000, 48000, self._upsample_state
+            data, 2, 1, 8000, 16000, self._upsample_state
         )
         return converted
     
     def resample_down(self, data: bytes) -> bytes:
-        """Resample from 48kHz to 8kHz, maintaining state for smooth audio."""
+        """Resample from 16kHz to 8kHz (2x ratio for cleaner conversion)."""
         import audioop
         converted, self._downsample_state = audioop.ratecv(
-            data, 2, 1, 48000, 8000, self._downsample_state
+            data, 2, 1, 16000, 8000, self._downsample_state
         )
         return converted
         
@@ -95,22 +95,18 @@ class HumeTwilioBridge:
             )
             logger.info(f"Connected to Hume EVI with config: {self.config_id}")
             
-            # Send session settings to configure audio format (input AND output)
+            # Send session settings to configure audio format
+            # Using 16kHz for cleaner 2x conversion ratio with Twilio's 8kHz
             session_settings = {
                 "type": "session_settings",
                 "audio": {
                     "encoding": "linear16",
-                    "sample_rate": 48000,
-                    "channels": 1
-                },
-                "output": {
-                    "encoding": "linear16",
-                    "sample_rate": 48000,
+                    "sample_rate": 16000,
                     "channels": 1
                 }
             }
             await self.hume_ws.send(json.dumps(session_settings))
-            logger.info("Sent audio session settings to Hume (in/out: linear16, 48kHz)")
+            logger.info("Sent audio session settings to Hume (linear16, 16kHz)")
             
             return True
         except Exception as e:
