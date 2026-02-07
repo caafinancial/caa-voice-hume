@@ -6,8 +6,8 @@ real-time voice conversations with backchanneling.
 
 Audio Flow:
 1. Twilio sends mulaw 8kHz audio via Media Streams
-2. Bridge converts to PCM 16kHz for Hume (2x ratio for cleaner conversion)
-3. Hume processes and returns PCM 16kHz audio
+2. Bridge converts to PCM 48kHz for Hume (EVI requires 48kHz)
+3. Hume processes and returns PCM 48kHz audio
 4. Bridge converts back to mulaw 8kHz for Twilio
 """
 
@@ -63,34 +63,37 @@ class HumeTwilioBridge:
         self._running = False
     
     def resample_up(self, data: bytes) -> bytes:
-        """Resample from 8kHz to 16kHz using simple linear interpolation."""
-        import struct
+        """Resample from 8kHz to 48kHz (6x) using linear interpolation."""
         import array
-        # Convert bytes to array of 16-bit samples
         samples = array.array('h')
         samples.frombytes(data)
         
-        # Simple 2x upsampling by linear interpolation
+        if len(samples) == 0:
+            return b''
+        
+        # 6x upsampling with linear interpolation
         upsampled = array.array('h')
         for i in range(len(samples) - 1):
-            upsampled.append(samples[i])
-            # Interpolate between this sample and next
-            upsampled.append((samples[i] + samples[i + 1]) // 2)
-        if samples:
-            upsampled.append(samples[-1])
+            s1, s2 = samples[i], samples[i + 1]
+            for j in range(6):
+                # Linear interpolation between s1 and s2
+                val = s1 + (s2 - s1) * j // 6
+                upsampled.append(val)
+        # Last sample repeated
+        for _ in range(6):
             upsampled.append(samples[-1])
         
         return upsampled.tobytes()
     
     def resample_down(self, data: bytes) -> bytes:
-        """Resample from 16kHz to 8kHz by taking every other sample."""
+        """Resample from 48kHz to 8kHz (6x) by decimation."""
         import array
         samples = array.array('h')
         samples.frombytes(data)
         
-        # Simple 2x downsampling - take every other sample (decimate)
+        # Take every 6th sample
         downsampled = array.array('h')
-        for i in range(0, len(samples), 2):
+        for i in range(0, len(samples), 6):
             downsampled.append(samples[i])
         
         return downsampled.tobytes()
@@ -110,17 +113,17 @@ class HumeTwilioBridge:
             logger.info(f"Connected to Hume EVI with config: {self.config_id}")
             
             # Send session settings to configure audio format
-            # Using 16kHz for cleaner 2x conversion ratio with Twilio's 8kHz
+            # Hume EVI requires 48kHz for best quality
             session_settings = {
                 "type": "session_settings",
                 "audio": {
                     "encoding": "linear16",
-                    "sample_rate": 16000,
+                    "sample_rate": 48000,
                     "channels": 1
                 }
             }
             await self.hume_ws.send(json.dumps(session_settings))
-            logger.info("Sent audio session settings to Hume (linear16, 16kHz)")
+            logger.info("Sent audio session settings to Hume (linear16, 48kHz)")
             
             return True
         except Exception as e:
