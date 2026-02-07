@@ -67,8 +67,7 @@ class HumeTwilioBridge:
     async def connect_hume(self) -> bool:
         """Connect to Hume EVI WebSocket."""
         try:
-            auth = base64.b64encode(f"{HUME_API_KEY}:{HUME_SECRET_KEY}".encode()).decode()
-            headers = {"Authorization": f"Basic {auth}"}
+            headers = {"X-Hume-Api-Key": HUME_API_KEY}
             url = f"{HUME_WS_URL}?config_id={self.config_id}"
             
             self.hume_ws = await websockets.connect(
@@ -181,8 +180,7 @@ async def hume_test():
     """Test Hume EVI connection."""
     import websockets
     try:
-        auth = base64.b64encode(f"{HUME_API_KEY}:{HUME_SECRET_KEY}".encode()).decode()
-        headers = {"Authorization": f"Basic {auth}"}
+        headers = {"X-Hume-Api-Key": HUME_API_KEY}
         url = f"{HUME_WS_URL}?config_id={HUME_CONFIG_ID}"
         
         ws = await websockets.connect(url, additional_headers=headers)
