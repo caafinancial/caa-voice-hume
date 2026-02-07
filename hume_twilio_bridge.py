@@ -61,25 +61,39 @@ class HumeTwilioBridge:
         self.stream_sid: Optional[str] = None
         self.call_sid: Optional[str] = None
         self._running = False
-        # Maintain resampling state to avoid clicks between chunks
-        self._upsample_state = None  # 8kHz -> 48kHz
-        self._downsample_state = None  # 48kHz -> 8kHz
     
     def resample_up(self, data: bytes) -> bytes:
-        """Resample from 8kHz to 16kHz (2x ratio for cleaner conversion)."""
-        import audioop
-        converted, self._upsample_state = audioop.ratecv(
-            data, 2, 1, 8000, 16000, self._upsample_state
-        )
-        return converted
+        """Resample from 8kHz to 16kHz using simple linear interpolation."""
+        import struct
+        import array
+        # Convert bytes to array of 16-bit samples
+        samples = array.array('h')
+        samples.frombytes(data)
+        
+        # Simple 2x upsampling by linear interpolation
+        upsampled = array.array('h')
+        for i in range(len(samples) - 1):
+            upsampled.append(samples[i])
+            # Interpolate between this sample and next
+            upsampled.append((samples[i] + samples[i + 1]) // 2)
+        if samples:
+            upsampled.append(samples[-1])
+            upsampled.append(samples[-1])
+        
+        return upsampled.tobytes()
     
     def resample_down(self, data: bytes) -> bytes:
-        """Resample from 16kHz to 8kHz (2x ratio for cleaner conversion)."""
-        import audioop
-        converted, self._downsample_state = audioop.ratecv(
-            data, 2, 1, 16000, 8000, self._downsample_state
-        )
-        return converted
+        """Resample from 16kHz to 8kHz by taking every other sample."""
+        import array
+        samples = array.array('h')
+        samples.frombytes(data)
+        
+        # Simple 2x downsampling - take every other sample (decimate)
+        downsampled = array.array('h')
+        for i in range(0, len(samples), 2):
+            downsampled.append(samples[i])
+        
+        return downsampled.tobytes()
         
     async def connect_hume(self) -> bool:
         """Connect to Hume EVI WebSocket."""
