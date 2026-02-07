@@ -176,6 +176,22 @@ async def health():
     return {"status": "healthy", "service": "CAA Voice - Hume EVI Bridge"}
 
 
+@app.get("/debug/hume-test")
+async def hume_test():
+    """Test Hume EVI connection."""
+    import websockets
+    try:
+        auth = base64.b64encode(f"{HUME_API_KEY}:{HUME_SECRET_KEY}".encode()).decode()
+        headers = {"Authorization": f"Basic {auth}"}
+        url = f"{HUME_WS_URL}?config_id={HUME_CONFIG_ID}"
+        
+        ws = await websockets.connect(url, additional_headers=headers)
+        await ws.close()
+        return {"status": "ok", "message": "Hume connection successful", "config_id": HUME_CONFIG_ID}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "config_id": HUME_CONFIG_ID}
+
+
 @app.post("/voice/incoming")
 async def voice_incoming(request: Request):
     """TwiML endpoint for incoming calls."""
