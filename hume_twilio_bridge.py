@@ -77,6 +77,19 @@ class HumeTwilioBridge:
                 ping_timeout=20,
             )
             logger.info(f"Connected to Hume EVI with config: {self.config_id}")
+            
+            # Send session settings to configure audio format
+            session_settings = {
+                "type": "session_settings",
+                "audio": {
+                    "encoding": "linear16",
+                    "sample_rate": 48000,
+                    "channels": 1
+                }
+            }
+            await self.hume_ws.send(json.dumps(session_settings))
+            logger.info("Sent audio session settings to Hume")
+            
             return True
         except Exception as e:
             logger.error(f"Failed to connect to Hume: {e}")
@@ -115,25 +128,32 @@ class HumeTwilioBridge:
         
         if msg_type == "audio_output":
             audio_b64 = message.get("data")
-            if audio_b64:
-                # Convert PCM 48kHz from Hume to mulaw 8kHz for Twilio
-                pcm_data = base64.b64decode(audio_b64)
-                pcm_data = resample(pcm_data, 48000, 8000)  # Hume outputs 48kHz
-                mulaw_data = pcm_to_ulaw(pcm_data)
-                
-                twilio_message = {
-                    "event": "media",
-                    "streamSid": self.stream_sid,
-                    "media": {"payload": base64.b64encode(mulaw_data).decode()}
-                }
-                await self.twilio_ws.send_json(twilio_message)
+            if audio_b64 and self.stream_sid:
+                try:
+                    # Convert PCM 48kHz from Hume to mulaw 8kHz for Twilio
+                    pcm_data = base64.b64decode(audio_b64)
+                    pcm_data = resample(pcm_data, 48000, 8000)  # Hume outputs 48kHz
+                    mulaw_data = pcm_to_ulaw(pcm_data)
+                    
+                    twilio_message = {
+                        "event": "media",
+                        "streamSid": self.stream_sid,
+                        "media": {"payload": base64.b64encode(mulaw_data).decode()}
+                    }
+                    await self.twilio_ws.send_json(twilio_message)
+                except Exception as e:
+                    logger.error(f"Audio conversion error: {e}")
                 
         elif msg_type == "user_message":
             logger.info(f"User: {message.get('message', {}).get('content')}")
         elif msg_type == "assistant_message":
             logger.info(f"Sarah: {message.get('message', {}).get('content')}")
+        elif msg_type == "user_interruption":
+            logger.info("User interrupted")
         elif msg_type == "error":
-            logger.error(f"Hume error: {message.get('message')}")
+            logger.error(f"Hume error: {message.get('message')} - code: {message.get('code')}")
+        else:
+            logger.debug(f"Hume message type: {msg_type}")
     
     async def receive_hume_messages(self):
         """Listen for messages from Hume."""
