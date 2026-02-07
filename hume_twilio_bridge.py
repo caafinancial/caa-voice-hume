@@ -47,10 +47,8 @@ def pcm_to_ulaw(pcm_data: bytes) -> bytes:
     return audioop.lin2ulaw(pcm_data, 2)
 
 
-def resample(data: bytes, from_rate: int, to_rate: int) -> bytes:
-    """Resample audio data."""
-    import audioop
-    return audioop.ratecv(data, 2, 1, from_rate, to_rate, None)[0]
+# Note: Resampling is now done via instance methods to maintain state between chunks
+# This eliminates clicking/popping at chunk boundaries
 
 
 class HumeTwilioBridge:
@@ -63,6 +61,25 @@ class HumeTwilioBridge:
         self.stream_sid: Optional[str] = None
         self.call_sid: Optional[str] = None
         self._running = False
+        # Maintain resampling state to avoid clicks between chunks
+        self._upsample_state = None  # 8kHz -> 48kHz
+        self._downsample_state = None  # 48kHz -> 8kHz
+    
+    def resample_up(self, data: bytes) -> bytes:
+        """Resample from 8kHz to 48kHz, maintaining state for smooth audio."""
+        import audioop
+        converted, self._upsample_state = audioop.ratecv(
+            data, 2, 1, 8000, 48000, self._upsample_state
+        )
+        return converted
+    
+    def resample_down(self, data: bytes) -> bytes:
+        """Resample from 48kHz to 8kHz, maintaining state for smooth audio."""
+        import audioop
+        converted, self._downsample_state = audioop.ratecv(
+            data, 2, 1, 48000, 8000, self._downsample_state
+        )
+        return converted
         
     async def connect_hume(self) -> bool:
         """Connect to Hume EVI WebSocket."""
@@ -110,7 +127,7 @@ class HumeTwilioBridge:
                 # Decode base64 mulaw, convert to PCM 48kHz for Hume EVI
                 mulaw_data = base64.b64decode(payload)
                 pcm_data = ulaw_to_pcm(mulaw_data)
-                pcm_data = resample(pcm_data, 8000, 48000)  # Hume EVI uses 48kHz
+                pcm_data = self.resample_up(pcm_data)  # 8kHz -> 48kHz with state
                 
                 audio_message = {
                     "type": "audio_input",
@@ -132,7 +149,7 @@ class HumeTwilioBridge:
                 try:
                     # Convert PCM 48kHz from Hume to mulaw 8kHz for Twilio
                     pcm_data = base64.b64decode(audio_b64)
-                    pcm_data = resample(pcm_data, 48000, 8000)  # Hume outputs 48kHz
+                    pcm_data = self.resample_down(pcm_data)  # 48kHz -> 8kHz with state
                     mulaw_data = pcm_to_ulaw(pcm_data)
                     
                     twilio_message = {
