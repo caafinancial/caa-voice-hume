@@ -6,9 +6,9 @@ real-time voice conversations with backchanneling.
 
 Audio Flow:
 1. Twilio sends mulaw 8kHz audio via Media Streams
-2. Bridge converts to PCM 16kHz for Hume
-3. Hume processes and returns PCM audio
-4. Bridge converts back to mulaw for Twilio
+2. Bridge converts to PCM 48kHz for Hume (EVI default sample rate)
+3. Hume processes and returns PCM 48kHz audio
+4. Bridge converts back to mulaw 8kHz for Twilio
 """
 
 import os
@@ -94,10 +94,10 @@ class HumeTwilioBridge:
         elif event == "media":
             payload = message.get("media", {}).get("payload")
             if payload and self.hume_ws:
-                # Decode base64 mulaw, convert to PCM 16kHz
+                # Decode base64 mulaw, convert to PCM 48kHz for Hume EVI
                 mulaw_data = base64.b64decode(payload)
                 pcm_data = ulaw_to_pcm(mulaw_data)
-                pcm_data = resample(pcm_data, 8000, 16000)
+                pcm_data = resample(pcm_data, 8000, 48000)  # Hume EVI uses 48kHz
                 
                 audio_message = {
                     "type": "audio_input",
@@ -116,9 +116,9 @@ class HumeTwilioBridge:
         if msg_type == "audio_output":
             audio_b64 = message.get("data")
             if audio_b64:
-                # Convert PCM 16kHz to mulaw 8kHz for Twilio
+                # Convert PCM 48kHz from Hume to mulaw 8kHz for Twilio
                 pcm_data = base64.b64decode(audio_b64)
-                pcm_data = resample(pcm_data, 16000, 8000)
+                pcm_data = resample(pcm_data, 48000, 8000)  # Hume outputs 48kHz
                 mulaw_data = pcm_to_ulaw(pcm_data)
                 
                 twilio_message = {
