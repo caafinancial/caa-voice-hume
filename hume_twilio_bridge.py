@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Hume-Twilio Voice Bridge")
 
-# Hume credentials from environment
-HUME_API_KEY = os.environ.get("HUME_API_KEY")
-HUME_SECRET_KEY = os.environ.get("HUME_SECRET_KEY")
+# Hume credentials from environment (with fallback for initial testing)
+HUME_API_KEY = os.environ.get("HUME_API_KEY", "xR0HqXgU7ImPkTLfmCCtrLOoetSAfGWAm12RkIS4tcy9Kphk")
+HUME_SECRET_KEY = os.environ.get("HUME_SECRET_KEY", "inrvjGAPjbfSr9N1gPus00ZkfEXTTNryqkjf3FfMGLRCpLGXAzdUAqZALAjUCjqR")
 HUME_CONFIG_ID = os.environ.get("HUME_CONFIG_ID", "7d7e9c68-a45f-47d5-9c21-a5847bf4248d")
 
 # Hume EVI WebSocket URL
