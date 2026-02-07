@@ -95,17 +95,22 @@ class HumeTwilioBridge:
             )
             logger.info(f"Connected to Hume EVI with config: {self.config_id}")
             
-            # Send session settings to configure audio format
+            # Send session settings to configure audio format (input AND output)
             session_settings = {
                 "type": "session_settings",
                 "audio": {
                     "encoding": "linear16",
                     "sample_rate": 48000,
                     "channels": 1
+                },
+                "output": {
+                    "encoding": "linear16",
+                    "sample_rate": 48000,
+                    "channels": 1
                 }
             }
             await self.hume_ws.send(json.dumps(session_settings))
-            logger.info("Sent audio session settings to Hume")
+            logger.info("Sent audio session settings to Hume (in/out: linear16, 48kHz)")
             
             return True
         except Exception as e:
@@ -145,10 +150,13 @@ class HumeTwilioBridge:
         
         if msg_type == "audio_output":
             audio_b64 = message.get("data")
+            audio_id = message.get("id", "?")
+            audio_index = message.get("index", 0)
             if audio_b64 and self.stream_sid:
                 try:
                     # Convert PCM 48kHz from Hume to mulaw 8kHz for Twilio
                     pcm_data = base64.b64decode(audio_b64)
+                    logger.debug(f"Audio chunk {audio_id}[{audio_index}]: {len(pcm_data)} bytes")
                     pcm_data = self.resample_down(pcm_data)  # 48kHz -> 8kHz with state
                     mulaw_data = pcm_to_ulaw(pcm_data)
                     
